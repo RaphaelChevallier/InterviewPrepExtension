@@ -1,0 +1,30 @@
+{
+    "manifest_version": 3,
+    "name": "Mock Coding Interview AI",
+    "version": "1.0",
+    "description": "Use AI to mock interview questions while practicing on websites like Leetcode and Hackerrank!",
+    "permissions": [
+        "activeTab",
+        "storage",
+        "audioCapture",
+        "scripting",
+        "tabs" 
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "action": {
+      "default_icon": "images/favicon-16x16.png"
+    },
+    "content_scripts": [
+      {
+        "matches": ["https://leetcode.com/problems/*", "https://www.hackerrank.com/*"],
+        "js": ["content.js"]
+      }
+    ],
+    "icons": {
+      "16": "images/favicon-16x16.png",
+      "32": "images/favicon-32x32.png"
+    }
+  }
+  

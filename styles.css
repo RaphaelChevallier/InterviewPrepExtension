@@ -1,0 +1,65 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100vw; /* Responsive width */
+    height: 100vh; /* Responsive height */
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+}
+
+.popup-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: #f9f9f9;
+    border: 1px solid #ccc;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    overflow: hidden; /* Ensures no scrolling occurs at the body level */
+}
+
+header {
+    flex: none; /* Header size remains constant */
+    padding: 10px;
+}
+
+.transcript-display, .response-area {
+    flex-grow: 1; /* Takes up remaining space */
+    padding: 10px;
+    margin: 5px;
+    background: #fff;
+    border: 1px solid #ddd;
+    overflow-y: auto; /* Enables scrolling within element */
+}
+
+button {
+    padding: 10px;
+    width: calc(100% - 20px); /* Responsive width with padding */
+    margin: 5px 10px;
+    cursor: pointer;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+/* Responsive adjustments for smaller windows or high DPI screens */
+@media (max-width: 400px) {
+    html, body {
+        font-size: 14px; /* Smaller text on smaller screens */
+    }
+
+    button {
+        padding: 8px;
+    }
+}
+
+#qd-content {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch; 
+    overflow: hidden; 
+}
