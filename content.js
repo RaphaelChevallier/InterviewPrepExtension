@@ -11,7 +11,6 @@ window.onload = function() {
         top: 0;
         width: 225px; // Set fixed width
         height: 100vh; // Ensure it covers the full viewport height
-        background-color: #f4f4f4; // Ensure full background coverage
         z-index: 1001;
         overflow-y: auto;
         border-right: 1px solid #ccc;
@@ -24,6 +23,10 @@ window.onload = function() {
         <p>Interact with your AI helper here. Ask questions, get coding help, etc.</p>
     `;
     document.body.prepend(assistantContainer); // Prepend the sidebar to the body
+
+    // Fetch and set the background color from the body to the sidebar
+    const bodyBgColor = getComputedStyle(document.body).backgroundColor;
+    assistantContainer.style.backgroundColor = bodyBgColor;
 
     // Set up responsive padding on the body
     document.body.style.transition = 'padding-left 0.5s'; // Smooth transition for body padding
