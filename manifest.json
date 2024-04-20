@@ -19,7 +19,8 @@
     "content_scripts": [
       {
         "matches": ["https://leetcode.com/problems/*", "https://www.hackerrank.com/*"],
-        "js": ["content.js"]
+        "js": ["content.js"],
+        "run_at": "document_idle"
       }
     ],
     "icons": {
