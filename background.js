@@ -57,6 +57,7 @@ function requestCurrentCode(tabId, selector) {
 chrome.runtime.onMessage.addListener(function(request, sender) {
     const tabId = sender.tab ? sender.tab.id : null;  // Correctly retrieving tabId from sender
     if (request.action === "startFetchingCode" && tabId) {
+        fetchSessionID();
         // Ensure no duplicate intervals
         if (!tabUpdateIntervals[tabId]) {
             tabUpdateIntervals[tabId] = setInterval(() => {
@@ -69,6 +70,11 @@ chrome.runtime.onMessage.addListener(function(request, sender) {
             }, 5000);  // Polling every 5 seconds
         }
     } else if (request.action === "stopFetchingCode" && tabId) {
+        chrome.storage.local.get('sessionId', function(data) {
+            if (data.sessionId) {
+                endInterview(data.sessionId);
+            }
+        })
         // Clear interval when requested to stop fetching
         if (tabUpdateIntervals[tabId]) {
             clearInterval(tabUpdateIntervals[tabId]);
@@ -79,8 +85,93 @@ chrome.runtime.onMessage.addListener(function(request, sender) {
 
 // Clear interval when a tab is closed to avoid memory leaks
 chrome.tabs.onRemoved.addListener(function(tabId) {
+    chrome.storage.local.get('sessionId', function(data) {
+        if (data.sessionId) {
+            endInterview(data.sessionId);
+        }})
     if (tabUpdateIntervals[tabId]) {
         clearInterval(tabUpdateIntervals[tabId]);
         delete tabUpdateIntervals[tabId];
     }
 });
+
+function fetchSessionID() {
+    fetch('http://localhost:5001/ai/generateUUID', {
+    method: 'GET',  // or 'POST' if applicable
+    headers: {
+        'Content-Type': 'application/json'
+    }
+})
+.then(response => response.json())
+.then(data => {chrome.storage.local.set({sessionId: data.sessionId}); startInterview(chrome.storage.local.get('codeLanguage'), chrome.storage.local.get('currentAssesmentDescription'), "raphaelchevallier@hotmail.com", data.sessionId)
+.then(data => {
+    // Handle data returned from the server
+    if (data.startInterview) {
+        console.log('Interview session has started successfully.');
+    }
+})
+.catch(error => {
+    // Handle any errors that occur during fetch
+    console.log('Failed to start the interview:', error);
+});})
+.catch(error => console.error('Error:', error));
+}
+
+function startInterview(codeLanguage, currentAssesmentDescription, email, sessionId) {
+    const url = 'http://localhost:5001/ai/startInterview';
+    const postData = {
+        codeLanguage: codeLanguage,
+        currentAssesmentDescription: currentAssesmentDescription,
+        email: email,
+        sessionId: sessionId
+    };
+
+    return fetch(url, {
+        method: 'POST',   // Specify the method
+        headers: {
+            'Content-Type': 'application/json'  // Set the headers content type
+        },
+        body: JSON.stringify(postData)  // Convert the JavaScript object to a JSON string
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();  // Parse JSON response into native JavaScript objects
+    })
+    .then(data => {
+        console.log('Interview started:', data);
+        return data;  // Return the data to be used by another function or variable
+    })
+    .catch(error => {
+        console.error('Error starting interview:', error);
+    });
+}
+
+function endInterview(sessionId) {
+    const url = 'http://localhost:5001/ai/endInterview';
+    const postData = {
+        sessionId: sessionId
+    };
+
+    return fetch(url, {
+        method: 'POST',   // Specify the method
+        headers: {
+            'Content-Type': 'application/json'  // Set the headers content type
+        },
+        body: JSON.stringify(postData)  // Convert the JavaScript object to a JSON string
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();  // Parse JSON response into native JavaScript objects
+    })
+    .then(data => {
+        console.log('Interview ended:', data);
+        return data;  // Return the data to be used by another function or variable
+    })
+    .catch(error => {
+        console.error('Error ending interview:', error);
+    });
+}
