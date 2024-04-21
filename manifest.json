@@ -9,7 +9,9 @@
         "audioCapture",
         "scripting",
         "tabs",
-        "videoCapture"
+        "videoCapture",
+        "identity",
+        "identity.email"
     ],
     "background": {
       "service_worker": "background.js"

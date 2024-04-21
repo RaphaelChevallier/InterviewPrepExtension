@@ -57,7 +57,11 @@ function requestCurrentCode(tabId, selector) {
 chrome.runtime.onMessage.addListener(function(request, sender) {
     const tabId = sender.tab ? sender.tab.id : null;  // Correctly retrieving tabId from sender
     if (request.action === "startFetchingCode" && tabId) {
-        fetchSessionID();
+        chrome.storage.local.get(['currentCodeLanguage', 'currentProblem'], function(data) {
+            console.log(data)
+            if (data.currentCodeLanguage && data.currentProblem) {
+                fetchSessionID(data.currentCodeLanguage, data.currentProblem);
+            }})
         // Ensure no duplicate intervals
         if (!tabUpdateIntervals[tabId]) {
             tabUpdateIntervals[tabId] = setInterval(() => {
@@ -95,7 +99,7 @@ chrome.tabs.onRemoved.addListener(function(tabId) {
     }
 });
 
-function fetchSessionID() {
+function fetchSessionID(codeLanguage, currentAssesmentDescription) {
     fetch('http://localhost:5001/ai/generateUUID', {
     method: 'GET',  // or 'POST' if applicable
     headers: {
@@ -103,7 +107,7 @@ function fetchSessionID() {
     }
 })
 .then(response => response.json())
-.then(data => {chrome.storage.local.set({sessionId: data.sessionId}); startInterview(chrome.storage.local.get('codeLanguage'), chrome.storage.local.get('currentAssesmentDescription'), "raphaelchevallier@hotmail.com", data.sessionId)
+.then(data => {chrome.storage.local.set({sessionId: data.sessionId}); startInterview(codeLanguage, currentAssesmentDescription, "raphaelchevallier@hotmail.com", data.sessionId)
 .then(data => {
     // Handle data returned from the server
     if (data.startInterview) {
