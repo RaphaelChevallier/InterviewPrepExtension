@@ -5,6 +5,9 @@ let settingsButton = null; // Declare the settings button
 let webcamVideo = null;
 let stream = null;  // This will hold the stream object
 let transcriptBox = null;
+let micButton = null;
+let audioStream = null;
+let micControl = null;
 
 window.onload = function() {
     // Create the sidebar and insert it at the beginning of the body
@@ -105,15 +108,15 @@ window.onload = function() {
 
                     // Setup the close button within the settings
                     document.getElementById('close-settings').onclick = function() {
-                        module.toggleSettings(false); // Hide settings
+                        toggleSettings(false); // Hide settings
                     };
 
-                    module.toggleSettings(true); // Initially show settings
+                    toggleSettings(true); // Initially show settings
                 })
                 .catch(error => console.error('Error loading the settings module:', error));
         } else {
             // Toggle the settings visibility if already loaded
-            module.toggleSettings(settingsInterface.style.display === 'none');
+            toggleSettings(settingsInterface.style.display === 'none');
         }
     };
 
@@ -199,6 +202,47 @@ window.onload = function() {
     };
     webcamBox.appendChild(toggleWebcamButton);
 
+    // Create the microphone control bar
+    micControl = document.createElement('div');
+    micControl.id = 'micControl';
+    micControl.style.cssText = `
+        width: 100%;
+        height: 30px;
+        background-color: #6495ED;
+        color: black;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border-radius: 5px;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        font-size: 14px;
+        transition: background-color 0.3s;
+    `;
+    micControl.textContent = 'Open Mic'; // Initial text
+    micControl.onclick = function() {
+        if (audioStream) {
+            // Turn off the microphone
+            audioStream.getTracks().forEach(track => track.stop());
+            audioStream = null;
+            this.style.backgroundColor = '#6495ED'; // Grey when off
+            this.textContent = 'Open Mic';
+        } else {
+            // Turn on the microphone
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function(newStream) {
+                    audioStream = newStream;
+                    micControl.style.backgroundColor = 'red'; // Red when on
+                    micControl.textContent = 'Mute Mic';
+                })
+                .catch(function(error) {
+                    console.error("Error accessing the microphone: ", error);
+                });
+        }
+    };
+    assistantContainer.appendChild(micControl); // Append it somewhere in the sidebar
+
     let transcriptBox = document.createElement('div');
     transcriptBox.id = 'transcript-box';
     transcriptBox.style.cssText = `
@@ -254,6 +298,17 @@ window.onload = function() {
         }
     });
 
+    function toggleSettings(displayStatus) {
+        if (!settingsInterface) {
+            settingsInterface = setupSettingsUI();
+            assistantContainer.appendChild(settingsInterface);
+            document.getElementById('close-settings').onclick = function() {
+                toggleSettings(false); // Setup close button on first use
+            };
+        }
+        settingsInterface.style.display = displayStatus ? 'block' : 'none';
+    }
+
     function toggleAssistantContainer() {
         if (assistantContainer.style.left === '-225px') {
             // Slide in the sidebar
@@ -277,6 +332,13 @@ window.onload = function() {
                 webcamBox.style.backgroundPosition = 'center';
                 webcamBox.style.backgroundSize = 'cover';
                 document.querySelector('#toggleWebcamButton').style.backgroundColor = 'green';
+            }
+            if (audioStream) {
+                // Turn off the microphone
+                audioStream.getTracks().forEach(track => track.stop());
+                audioStream = null;
+                micControl.style.backgroundColor = '#6495ED'; // Grey when off
+                micControl.textContent = 'Open Mic';
             }
         }
     }
