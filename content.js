@@ -1,7 +1,10 @@
-// Declare assistantContainer globally to manage its state easily
 let assistantContainer = null;
 let toggleHandle = null;
-let closeButton = null;  // Declare the close button
+let closeButton = null;
+let settingsButton = null; // Declare the settings button
+let webcamVideo = null;
+let stream = null;  // This will hold the stream object
+let transcriptBox = null;
 
 window.onload = function() {
     // Create the sidebar and insert it at the beginning of the body
@@ -24,7 +27,7 @@ window.onload = function() {
     `;
     document.body.prepend(assistantContainer);
 
-    // Create a toggle handle
+    // Toggle handle
     toggleHandle = document.createElement('div');
     toggleHandle.id = 'ai-assistant-toggle-handle';
     toggleHandle.className = 'toggle-handle'; 
@@ -43,9 +46,9 @@ window.onload = function() {
     `;
     assistantContainer.appendChild(toggleHandle);
 
-    // Create a close button
+    // Close button
     closeButton = document.createElement('div');
-    closeButton.innerText = 'X';  // Text for the close button
+    closeButton.innerText = 'X';
     closeButton.style.cssText = `
         position: absolute;
         top: 5px;
@@ -60,26 +63,191 @@ window.onload = function() {
         align-items: center;
         justify-content: center;
     `;
-    closeButton.onmouseover = function() {
-        this.style.color = 'red';  // Change color to red on hover
-    };
-    closeButton.onmouseout = function() {
-        this.style.color = 'black';  // Revert color when not hovering
-    };
     closeButton.onclick = function() {
-        toggleAssistantContainer();  // Function to close the sidebar
+        toggleAssistantContainer();
     };
-    assistantContainer.appendChild(closeButton);  // Append the close button to the sidebar
+    assistantContainer.appendChild(closeButton);
+
+    // Settings button
+    settingsButton = document.createElement('div');
+    settingsButton.innerHTML = '&#9881;'; // HTML entity for the cog symbol
+    settingsButton.style.cssText = `
+        position: absolute;
+        top: 0px;
+        left: 10px;
+        font-size: 20px;
+        cursor: pointer;
+        color: black;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.3s ease; 
+    `;
+
+    settingsButton.onmouseover = function() {
+        this.style.transform = 'scale(1.2)';  // Enlarge by 5% on hover
+    };
+    settingsButton.onmouseout = function() {
+        this.style.transform = 'scale(1)';  // Return to normal size when not hovering
+    };
+    settingsButton.onclick = function() {
+        console.log('Settings clicked');
+    };
+    let settingsInterface = null; // This will hold the loaded settings interface
+
+    settingsButton.onclick = function() {
+        if (!settingsInterface) {
+            import(chrome.runtime.getURL('settings.js'))
+                .then((module) => {
+                    // First time setup, create and append the settings UI
+                    settingsInterface = module.setupSettingsUI();
+                    assistantContainer.appendChild(settingsInterface);
+
+                    // Setup the close button within the settings
+                    document.getElementById('close-settings').onclick = function() {
+                        module.toggleSettings(false); // Hide settings
+                    };
+
+                    module.toggleSettings(true); // Initially show settings
+                })
+                .catch(error => console.error('Error loading the settings module:', error));
+        } else {
+            // Toggle the settings visibility if already loaded
+            module.toggleSettings(settingsInterface.style.display === 'none');
+        }
+    };
+
+
+    assistantContainer.appendChild(settingsButton);
+
+    // Image box
+    let imageBox = document.createElement('div');
+    imageBox.style.cssText = `
+        width: 100%;
+        height: 120px;
+        background-color: #000000;
+        margin-top: 25px;
+        margin-bottom: 10px;
+    `;
+    assistantContainer.appendChild(imageBox);
+
+    // Webcam box and video element
+    let webcamBox = document.createElement('div');
+    webcamBox.id = 'webcam-box';
+    webcamBox.style.cssText = `
+        width: 100%;
+        height: 120px;
+        background-color: #ddd;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        margin-top: 10px;
+        margin-bottom: 15px;
+    `;
+    webcamVideo = document.createElement('video');
+    webcamVideo.style.cssText = `
+        width: 100%;
+        height: auto;
+        margin-top: 10px;
+        margin-bottom: 10px;
+    `;
+    webcamBox.appendChild(webcamVideo);
+    assistantContainer.appendChild(webcamBox);
+
+    // Toggle webcam button
+    let toggleWebcamButton = document.createElement('button');
+    toggleWebcamButton.id = 'toggleWebcamButton';
+    toggleWebcamButton.style.cssText = `
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background-color: green;
+        border: none;
+        cursor: pointer;
+    `;
+    toggleWebcamButton.onclick = function() {
+        if (stream) {
+            // Turn off the webcam
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+            webcamVideo.srcObject = null;
+            webcamVideo.style.display = 'none';
+            this.style.backgroundColor = 'green';
+            webcamBox.style.backgroundImage = "url('no-webcam.png')";
+            webcamBox.style.backgroundRepeat = 'no-repeat';
+            webcamBox.style.backgroundPosition = 'center';
+            webcamBox.style.backgroundSize = 'cover';
+        } else {
+            // Turn on the webcam
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(newStream) {
+                    stream = newStream;
+                    webcamVideo.srcObject = stream;
+                    webcamVideo.play();
+                    webcamVideo.style.display = 'block';
+                    webcamBox.style.backgroundImage = 'none';
+                    toggleWebcamButton.style.backgroundColor = 'red';
+                })
+                .catch(function(error) {
+                    console.error("Error accessing the webcam: ", error);
+                });
+        }
+    };
+    webcamBox.appendChild(toggleWebcamButton);
+
+    let transcriptBox = document.createElement('div');
+    transcriptBox.id = 'transcript-box';
+    transcriptBox.style.cssText = `
+        width: 100%;
+        height: 150px;  // Set a fixed height
+        background-color: #f0f0f0;  // Light grey background for visibility
+        overflow-y: scroll;  // Enable vertical scrolling
+        box-sizing: border-box;
+        border: 1px solid #ccc;  // Add a subtle border
+        margin-top: 10px;
+    `;
+    
+    // Header for the transcript box
+    let transcriptHeader = document.createElement('div');
+    transcriptHeader.style.cssText = `
+        padding: 5px 10px;
+        font-size: 16px;
+        font-weight: bold;
+        border-bottom: 1px solid #ccc;
+        color: #333;
+    `;
+    transcriptHeader.textContent = 'Transcript';
+    
+    // Append the header to the transcript box
+    transcriptBox.appendChild(transcriptHeader);
+    
+    // Content area below the header for actual transcript text
+    let transcriptContent = document.createElement('div');
+    transcriptContent.style.cssText = `
+        height: calc(100% - 33px);  // Subtract the height of the header
+        overflow-y: auto;
+        padding: 8px;
+        font-size: 14px;
+    `;
+    transcriptContent.textContent = '';  // Initially empty
+    
+    // Append the content area to the transcript box
+    transcriptBox.appendChild(transcriptContent);
+    
+    // Add the transcript box to the sidebar
+    assistantContainer.appendChild(transcriptBox);
 
     document.body.style.transition = 'padding-left 0.5s';
     document.body.style.overflowX = 'hidden';
 
-    // Listen for toggle click, initially hidden
     toggleHandle.addEventListener('click', function() {
         toggleAssistantContainer();
     });
 
-    // Background script message listener
     chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         if (message.action === "toggleAssistant") {
             toggleAssistantContainer();
@@ -88,30 +256,29 @@ window.onload = function() {
 
     function toggleAssistantContainer() {
         if (assistantContainer.style.left === '-225px') {
-            assistantContainer.style.left = '0px';  // Slide in the sidebar
+            // Slide in the sidebar
+            assistantContainer.style.left = '0px';
             document.body.style.paddingLeft = '225px';
             toggleHandle.style.display = 'none';
+            // Do not automatically turn on the webcam when the sidebar slides in
         } else {
-            assistantContainer.style.left = '-225px';  // Slide out the sidebar
+            // Slide out the sidebar
+            assistantContainer.style.left = '-225px';
             document.body.style.paddingLeft = '0';
             toggleHandle.style.display = 'block';
+            // Automatically turn off the webcam when the sidebar slides out
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                webcamVideo.srcObject = null;
+                webcamVideo.style.display = 'none';
+                webcamBox.style.backgroundImage = "url('no-webcam.png')";
+                webcamBox.style.backgroundRepeat = 'no-repeat';
+                webcamBox.style.backgroundPosition = 'center';
+                webcamBox.style.backgroundSize = 'cover';
+                document.querySelector('#toggleWebcamButton').style.backgroundColor = 'green';
+            }
         }
     }
-
-    chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
-        if (message.action === "toggleExtension") {
-            isEnabled = message.enabled; // Update local enabled state
-            toggleExtension(); // Adjust visibility based on new state
-        }
-    });
-
-    function toggleExtension() {
-        if (isEnabled) {
-            assistantContainer.style.display = 'block';
-            toggleAssistantContainer()
-        } else {
-            assistantContainer.style.display = 'none';
-            document.body.style.paddingLeft = '0';
-        }
-    }
+    
 };
