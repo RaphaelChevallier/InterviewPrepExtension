@@ -402,6 +402,11 @@ function endInterview() {
         return header + "\n\nMain Problem Desicription:\n" + mainProblem + "\n\nPossible Topics Used to Solve:\n" + possibleUsefulDataStructuresAndAlgorithms + "\n\nSimilar Questions:\n" + similarQuestions;
     }
 
+    function readCodeLanguageForAssesment(){
+        const button = document.querySelector("#headlessui-popover-button-\\:r1d\\: > div > button");
+        return button.innerText;
+    }
+
     chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         if (request.action === "readProblemStatementLeetcode") {
             observeChangesLeetcode(sendResponse);
@@ -430,8 +435,9 @@ function endInterview() {
     // Listen for messages from the background script
     chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         if (request.action === "fetchCurrentCode") {
-            const text = fetchCurrentCode(request.selector);
-            sendResponse({data: text});
+            const code = fetchCurrentCode(request.selector);
+            const codeLanguage = readCodeLanguageForAssesment();
+            sendResponse({text: code, language: codeLanguage});
             return true;  // Indicates that you wish to send a response asynchronously
         }
     });

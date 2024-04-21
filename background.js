@@ -39,24 +39,17 @@ chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
     }
 });
 
-function requestCurrentCode(tabId, selector) {
-    chrome.tabs.sendMessage(tabId, {action: "fetchCurrentCode", selector: selector}, response => {
-        if (response && response.data) {
-            console.log('Received inner text:', response.data);
-        } else {
-            console.log('Failed to fetch inner text or no data returned.');
-        }
-    });
-}
-
 const tabUpdateIntervals = {};
 
 function requestCurrentCode(tabId, selector) {
     chrome.tabs.sendMessage(tabId, {action: "fetchCurrentCode", selector: selector}, response => {
-        if (response && response.data) {
-            console.log('Received inner text:', response.data);
+        if (response && response.text && response.language) {
+            console.log('Received code:', response.text);
+            chrome.storage.local.set({currentCode: response.text})
+            console.log('Received language: ', response.language );
+            chrome.storage.local.set({currentCodeLanguage: response.language})
         } else {
-            console.log('Failed to fetch inner text or no data returned.');
+            console.log('Failed to fetch code or coding language or no data returned.');
         }
     });
 }
