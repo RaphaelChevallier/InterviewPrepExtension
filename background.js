@@ -1,5 +1,4 @@
 // background.js
-
 // Initialize or check current state when the extension loads
 chrome.runtime.onInstalled.addListener(() => {
     chrome.storage.local.get('isEnabled', function(data) {
@@ -19,4 +18,76 @@ chrome.action.onClicked.addListener(function(tab) {
             chrome.tabs.sendMessage(tab.id, {action: "toggleExtension", enabled: newState});
         });
     });
+});
+
+chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+    // Check if the page has finished loading and if it matches a specific URL
+    if (tab.url.includes('https://leetcode.com/problems/')) {
+        // Request the content script to read text
+        chrome.storage.local.get('isEnabled', function(data) {
+            if (data.isEnabled) {
+                chrome.tabs.sendMessage(tabId, {action: "readProblemStatementLeetcode"}, function(response) {
+                    if (response && response.data) {
+                        chrome.storage.local.set({currentProblem: response.data})
+                        console.log('The current coding assesment the user is looking at:\n', response.data);
+                    } else {
+                        console.log('No response or no data available');
+                    }
+                });
+        }
+        })
+    }
+});
+
+function requestCurrentCode(tabId, selector) {
+    chrome.tabs.sendMessage(tabId, {action: "fetchCurrentCode", selector: selector}, response => {
+        if (response && response.data) {
+            console.log('Received inner text:', response.data);
+        } else {
+            console.log('Failed to fetch inner text or no data returned.');
+        }
+    });
+}
+
+const tabUpdateIntervals = {};
+
+function requestCurrentCode(tabId, selector) {
+    chrome.tabs.sendMessage(tabId, {action: "fetchCurrentCode", selector: selector}, response => {
+        if (response && response.data) {
+            console.log('Received inner text:', response.data);
+        } else {
+            console.log('Failed to fetch inner text or no data returned.');
+        }
+    });
+}
+
+chrome.runtime.onMessage.addListener(function(request, sender) {
+    const tabId = sender.tab ? sender.tab.id : null;  // Correctly retrieving tabId from sender
+    if (request.action === "startFetchingCode" && tabId) {
+        // Ensure no duplicate intervals
+        if (!tabUpdateIntervals[tabId]) {
+            tabUpdateIntervals[tabId] = setInterval(() => {
+                chrome.storage.local.get('isEnabled', function(data) {
+                    if (data.isEnabled) {
+                        const specificSelector = "#editor .view-lines.monaco-mouse-cursor-text"; // Update this selector as needed
+                        requestCurrentCode(tabId, specificSelector);
+                    }
+                });
+            }, 5000);  // Polling every 5 seconds
+        }
+    } else if (request.action === "stopFetchingCode" && tabId) {
+        // Clear interval when requested to stop fetching
+        if (tabUpdateIntervals[tabId]) {
+            clearInterval(tabUpdateIntervals[tabId]);
+            delete tabUpdateIntervals[tabId];
+        }
+    }
+});
+
+// Clear interval when a tab is closed to avoid memory leaks
+chrome.tabs.onRemoved.addListener(function(tabId) {
+    if (tabUpdateIntervals[tabId]) {
+        clearInterval(tabUpdateIntervals[tabId]);
+        delete tabUpdateIntervals[tabId];
+    }
 });
