@@ -234,6 +234,8 @@ window.onload = function() {
 
 startInterview.onclick = function() {
     if (!interviewing) {
+        const messages = document.querySelectorAll('.transcript-message');
+        messages.forEach(msg => msg.remove());
         chrome.runtime.sendMessage({action: "startFetchingCode"});
         interviewing = true;
         micControl.style.display = 'flex';
@@ -365,10 +367,65 @@ scrollableContainer.style.cssText = `
 // Append the scrollable container to the transcript box
 transcriptBox.appendChild(scrollableContainer);
 
+let resizeHandle = document.createElement('div');
+resizeHandle.style.cssText = `
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    cursor: ew-resize;
+    background-color: #aaa; // Give it a slight visibility
+`;
+assistantContainer.appendChild(resizeHandle);
+
+let isResizing = false;
+let lastDownX = 0;
+
+resizeHandle.addEventListener('mousedown', function(e) {
+    isResizing = true;
+    lastDownX = e.clientX;
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+});
+
+function onMouseMove(e) {
+    if (!isResizing) return;
+
+    let offsetRight = document.body.clientWidth - (e.clientX - assistantContainer.getBoundingClientRect().left);
+    let newWidth = document.body.clientWidth - offsetRight;
+    let maxWidth = window.innerWidth / 4;  // Calculate 1/4th of the screen width
+
+    // Respect the minimum width and dynamic maximum width boundaries
+    if (newWidth < 225) newWidth = 225;
+    if (newWidth > maxWidth) newWidth = maxWidth;
+
+    assistantContainer.style.width = newWidth + 'px';
+    document.body.style.paddingLeft = newWidth + 'px';  // Adjust body padding to avoid content overlap
+}
+
+window.addEventListener('resize', function() {
+    let currentWidth = parseInt(assistantContainer.style.width, 10);
+    let maxWidth = window.innerWidth / 4;
+
+    if (currentWidth > maxWidth) {
+        assistantContainer.style.width = maxWidth + 'px';
+        document.body.style.paddingLeft = maxWidth + 'px';
+    }
+});
+
+function onMouseUp(e) {
+    // Stop resizing when the user releases the mouse button
+    isResizing = false;
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+}
+
 // Listening to messages and adding content to the scrollable container
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     if (message.action === "displayTranscript" && message.transcript) {
         let transcriptContent = document.createElement('div');
+        transcriptContent.className = 'transcript-message';
         transcriptContent.style.cssText = `
             font-size: 10px; 
             color: #000;
@@ -376,7 +433,8 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         `;
         transcriptContent.textContent = message.transcript;
         scrollableContainer.appendChild(transcriptContent);  // Append messages to the scrollable container
-        console.log('Transcript added:', message.transcript);  // Log for debugging
+
+        speakText(message.transcript);
     }
 });
 
@@ -522,21 +580,43 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
             }
         }
     }
+
+    function speakText(text) {
+        if ('speechSynthesis' in window) {
+            // Check if speaking is currently being processed and cancel it to start fresh
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+            }
+        
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.voice = speechSynthesis.getVoices().find(voice => voice.lang === "en-US"); // Optional: Set the voice to a specific one
+            utterance.pitch = 1; // Optional: Set pitch, can be between 0 (lowest) and 2 (highest), 1 is default
+            utterance.rate = 1; // Optional: Set rate, can be between 0.1 (slowest) and 10 (fastest), 1 is default
+            utterance.volume = 1; // Optional: Set volume, can be between 0 (muted) and 1 (loudest), 1 is default
+        
+            window.speechSynthesis.speak(utterance);
+        } else {
+            console.log("Sorry, your browser does not support text to speech!");
+        }
+    }
     
 
     function toggleAssistantContainer() {
-        if (assistantContainer.style.left === '-225px') {
+        let currentWidth = assistantContainer.offsetWidth; // Get the current width of the sidebar
+    
+        // Check if the sidebar is hidden (considering it might be the initial state or closed)
+        if (assistantContainer.style.left === '-225px' || assistantContainer.style.left === '' || parseInt(assistantContainer.style.left, 10) < 0) {
             // Slide in the sidebar
-            assistantContainer.style.left = '0px';
-            document.body.style.paddingLeft = '225px';
-            toggleHandle.style.display = 'none';
-            // Do not automatically turn on the webcam when the sidebar slides in
+            assistantContainer.style.left = '0px'; // Bring the sidebar into view
+            document.body.style.paddingLeft = currentWidth + 'px'; // Adjust the padding of the body
+            toggleHandle.style.display = 'none'; // Hide the toggle handle
         } else {
             // Slide out the sidebar
-            assistantContainer.style.left = '-225px';
-            document.body.style.paddingLeft = '0';
-            toggleHandle.style.display = 'block';
-            // Automatically turn off the webcam when the sidebar slides out
+            assistantContainer.style.left = '-' + currentWidth + 'px'; // Slide out using the current width
+            document.body.style.paddingLeft = '0'; // Reset the body padding
+            toggleHandle.style.display = 'block'; // Show the toggle handle
+    
+            // Turn off the webcam when the sidebar slides out
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
@@ -548,14 +628,17 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
                 webcamBox.style.backgroundSize = 'cover';
                 document.querySelector('#toggleWebcamButton').style.backgroundColor = 'green';
             }
+    
+            // Turn off the microphone
             if (audioStream) {
-                // Turn off the microphone
                 audioStream.getTracks().forEach(track => track.stop());
                 audioStream = null;
-                micControl.style.backgroundColor = '#6495ED'; // Grey when off
+                micControl.style.backgroundColor = '#6495ED'; // Set to grey when off
                 micControl.textContent = 'Open Mic';
             }
         }
     }
+    
+    
     
 };
