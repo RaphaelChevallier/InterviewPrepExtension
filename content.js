@@ -10,6 +10,8 @@ let audioStream = null;
 let interviewing = false;
 let micControl = null;
 let startInterview = null;
+let aiMuted = false;
+
 
 window.onload = function() {
     // Create the sidebar and insert it at the beginning of the body
@@ -134,9 +136,30 @@ window.onload = function() {
         height: 120px;
         background-color: #000000;
         margin-top: 25px;
+        position: relative;
         margin-bottom: 10px;
     `;
     assistantContainer.appendChild(imageBox);
+
+    let toggleAiMuteButton = document.createElement('button');
+    toggleAiMuteButton.id = 'toggleAiMuteButton';
+    toggleAiMuteButton.style.cssText = `
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background-color: green;
+        border: none;
+        cursor: pointer;
+    `;
+    imageBox.appendChild(toggleAiMuteButton);
+
+    toggleAiMuteButton.onclick = function() {
+        aiMuted = !aiMuted; // Toggle the mute state
+        toggleAiMuteButton.style.backgroundColor = aiMuted ? 'red' : 'green';
+    }
 
     // Webcam box and video element
     let webcamBox = document.createElement('div');
@@ -582,7 +605,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     }
 
     function speakText(text) {
-        if ('speechSynthesis' in window) {
+        if ('speechSynthesis' in window && !aiMuted) {
             // Check if speaking is currently being processed and cancel it to start fresh
             if (window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
