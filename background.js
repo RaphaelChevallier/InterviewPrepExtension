@@ -55,16 +55,22 @@ function requestCurrentCode(tabId, selector) {
 }
 
 chrome.runtime.onMessage.addListener(function(request, sender) {
-    const tabId = sender.tab ? sender.tab.id : null;  // Correctly retrieving tabId from sender
+    const tabId = sender.tab ? sender.tab.id : null;
     if (request.action === "startFetchingCode" && tabId) {
-        chrome.storage.local.get(['currentCodeLanguage', 'currentProblem'], function(data) {
+        chrome.storage.local.get(['currentCodeLanguage', 'currentProblem'], async function(data) {
             console.log(data)
             if (data.currentCodeLanguage && data.currentProblem) {
-                fetchSessionID(data.currentCodeLanguage, data.currentProblem);
+                let response = await fetchSessionID(data.currentCodeLanguage, data.currentProblem);
+                chrome.tabs.sendMessage(tabId, {action: "displayTranscript", transcript: response});
             }})
-        // Ensure no duplicate intervals
+        // Initialize interval object for this tab if it doesn't exist
         if (!tabUpdateIntervals[tabId]) {
-            tabUpdateIntervals[tabId] = setInterval(() => {
+            tabUpdateIntervals[tabId] = {};
+        }
+        
+        // First interval for fetching session ID and other details
+        if (!tabUpdateIntervals[tabId].fetchSession) {
+            tabUpdateIntervals[tabId].fetchSession = setInterval(() => {
                 chrome.storage.local.get('isEnabled', function(data) {
                     if (data.isEnabled) {
                         const specificSelector = "#editor .view-lines.monaco-mouse-cursor-text"; // Update this selector as needed
@@ -73,19 +79,38 @@ chrome.runtime.onMessage.addListener(function(request, sender) {
                 });
             }, 5000);  // Polling every 5 seconds
         }
+
+        // Second interval for getting advice
+        if (!tabUpdateIntervals[tabId].getAdvice) {
+            tabUpdateIntervals[tabId].getAdvice = setInterval(async () => {
+                chrome.storage.local.get(['isEnabled', 'sessionId', 'currentProblem', 'currentCode', 'currentCodeLanguage'], async function(data) {
+                    if (data.isEnabled && data.sessionId) {
+                        let response = await getAdvice(data.currentCodeLanguage, data.currentProblem, "raphaelchevallier@hotmail.com", data.currentCode, data.sessionId);
+                        chrome.tabs.sendMessage(tabId, {action: "displayTranscript", transcript: response});
+                    }
+                });
+            }, 20000);  // Polling every 20 seconds
+        }
     } else if (request.action === "stopFetchingCode" && tabId) {
-        chrome.storage.local.get('sessionId', function(data) {
-            if (data.sessionId) {
-                endInterview(data.sessionId);
-            }
-        })
-        // Clear interval when requested to stop fetching
+        // Clear specific intervals when requested to stop fetching
         if (tabUpdateIntervals[tabId]) {
-            clearInterval(tabUpdateIntervals[tabId]);
-            delete tabUpdateIntervals[tabId];
+            if (tabUpdateIntervals[tabId].fetchSession) {
+                clearInterval(tabUpdateIntervals[tabId].fetchSession);
+                delete tabUpdateIntervals[tabId].fetchSession;
+            }
+            if (tabUpdateIntervals[tabId].getAdvice) {
+                clearInterval(tabUpdateIntervals[tabId].getAdvice);
+                delete tabUpdateIntervals[tabId].getAdvice;
+            }
+
+            // If no more intervals are present, remove the tab from the object
+            if (Object.keys(tabUpdateIntervals[tabId]).length === 0) {
+                delete tabUpdateIntervals[tabId];
+            }
         }
     }
 });
+
 
 // Clear interval when a tab is closed to avoid memory leaks
 chrome.tabs.onRemoved.addListener(function(tabId) {
@@ -99,26 +124,60 @@ chrome.tabs.onRemoved.addListener(function(tabId) {
     }
 });
 
-function fetchSessionID(codeLanguage, currentAssesmentDescription) {
-    fetch('http://localhost:5001/ai/generateUUID', {
-    method: 'GET',  // or 'POST' if applicable
-    headers: {
-        'Content-Type': 'application/json'
+async function fetchSessionID(codeLanguage, currentAssesmentDescription) {
+    try {
+        const response = await fetch('http://localhost:5001/ai/generateUUID', {
+            method: 'GET',  // or 'POST' if applicable
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await response.json();
+        await chrome.storage.local.set({sessionId: data.sessionId});
+        const interviewResponse = await startInterview(codeLanguage, currentAssesmentDescription, "raphaelchevallier@hotmail.com", data.sessionId);
+
+        if (interviewResponse.startInterview) {
+            console.log('Interview session has started successfully.');
+            return interviewResponse.AIMessage;
+        } else {
+            throw new Error('Interview session failed to start');
+        }
+    } catch (error) {
+        console.error('Error in fetchSessionID:', error);
+        throw error;  // Rethrow the error so it can be caught by the caller
     }
-})
-.then(response => response.json())
-.then(data => {chrome.storage.local.set({sessionId: data.sessionId}); startInterview(codeLanguage, currentAssesmentDescription, "raphaelchevallier@hotmail.com", data.sessionId)
-.then(data => {
-    // Handle data returned from the server
-    if (data.startInterview) {
-        console.log('Interview session has started successfully.');
-    }
-})
-.catch(error => {
-    // Handle any errors that occur during fetch
-    console.log('Failed to start the interview:', error);
-});})
-.catch(error => console.error('Error:', error));
+}
+
+async function getAdvice(codeLanguage, currentAssesmentDescription, email, currentCode, sessionId) {
+    const url = 'http://localhost:5001/ai/getAdvice';
+    const postData = {
+        codeLanguage: codeLanguage,
+        currentAssesmentDescription: currentAssesmentDescription,
+        currentCode: currentCode,
+        email: email,
+        sessionId: sessionId
+    };
+
+    return fetch(url, {
+        method: 'POST',   // Specify the method
+        headers: {
+            'Content-Type': 'application/json'  // Set the headers content type
+        },
+        body: JSON.stringify(postData)  // Convert the JavaScript object to a JSON string
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();  // Parse JSON response into native JavaScript objects
+    })
+    .then(data => {
+        console.log('Interview started:', data);
+        return data.AIMessage;  // Return the data to be used by another function or variable
+    })
+    .catch(error => {
+        console.error('Error starting interview:', error);
+    });
 }
 
 function startInterview(codeLanguage, currentAssesmentDescription, email, sessionId) {

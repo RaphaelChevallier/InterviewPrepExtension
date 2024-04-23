@@ -230,7 +230,7 @@ window.onload = function() {
     `;
     startInterview.textContent = 'Start Interview - 1 Hour'; // Initial text
     let interviewTimer = null;
-let remainingTime = 3600; // in seconds
+    let remainingTime = 3600; // in seconds
 
 startInterview.onclick = function() {
     if (!interviewing) {
@@ -327,44 +327,59 @@ function endInterview() {
     };
     assistantContainer.appendChild(micControl); // Append it somewhere in the sidebar
 
-    let transcriptBox = document.createElement('div');
-    transcriptBox.id = 'transcript-box';
-    transcriptBox.style.cssText = `
-        width: 100%;
-        height: 150px;  // Set a fixed height
-        background-color: #f0f0f0;  // Light grey background for visibility
-        overflow-y: scroll;  // Enable vertical scrolling
-        box-sizing: border-box;
-        border: 1px solid #ccc;  // Add a subtle border
-        margin-top: 10px;
-    `;
-    
-    // Header for the transcript box
-    let transcriptHeader = document.createElement('div');
-    transcriptHeader.style.cssText = `
-        padding: 5px 10px;
-        font-size: 16px;
-        font-weight: bold;
-        border-bottom: 1px solid #ccc;
-        color: #333;
-    `;
-    transcriptHeader.textContent = 'Transcript';
-    
-    // Append the header to the transcript box
-    transcriptBox.appendChild(transcriptHeader);
-    
-    // Content area below the header for actual transcript text
-    let transcriptContent = document.createElement('div');
-    transcriptContent.style.cssText = `
-        height: calc(100% - 33px);  // Subtract the height of the header
-        overflow-y: auto;
-        padding: 8px;
-        font-size: 14px;
-    `;
-    transcriptContent.textContent = '';  // Initially empty
-    
-    // Append the content area to the transcript box
-    transcriptBox.appendChild(transcriptContent);
+    // Main container for the transcript box
+let transcriptBox = document.createElement('div');
+transcriptBox.id = 'transcript-box';
+transcriptBox.style.cssText = `
+    width: 100%;
+    background-color: #f0f0f0;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    margin-top: 10px;
+`;
+
+// Header for the transcript box
+let transcriptHeader = document.createElement('div');
+transcriptHeader.style.cssText = `
+    padding: 5px 10px;
+    font-size: 16px;
+    font-weight: bold;
+    border-bottom: 1px solid #ccc;
+    color: #333;
+`;
+transcriptHeader.textContent = 'Transcript';
+
+// Append the header to the transcript box
+transcriptBox.appendChild(transcriptHeader);
+
+// Scrollable container for messages
+let scrollableContainer = document.createElement('div');
+scrollableContainer.style.cssText = `
+    width: 100%;
+    max-height: 58vh;
+    height: 55vh;
+    overflow-y: scroll;
+    box-sizing: border-box;
+`;
+
+// Append the scrollable container to the transcript box
+transcriptBox.appendChild(scrollableContainer);
+
+// Listening to messages and adding content to the scrollable container
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    if (message.action === "displayTranscript" && message.transcript) {
+        let transcriptContent = document.createElement('div');
+        transcriptContent.style.cssText = `
+            font-size: 10px; 
+            color: #000;
+            margin-bottom: 2px;
+        `;
+        transcriptContent.textContent = message.transcript;
+        scrollableContainer.appendChild(transcriptContent);  // Append messages to the scrollable container
+        console.log('Transcript added:', message.transcript);  // Log for debugging
+    }
+});
+
     
     // Add the transcript box to the sidebar
     assistantContainer.appendChild(transcriptBox);
