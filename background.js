@@ -108,6 +108,10 @@ chrome.runtime.onMessage.addListener(function(request, sender) {
                 delete tabUpdateIntervals[tabId];
             }
         }
+        chrome.storage.local.get('sessionId', function(data) {
+            if (data.sessionId) {
+                endInterview(data.sessionId);
+            }})
     }
 });
 

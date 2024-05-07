@@ -31,9 +31,9 @@
       "32": "images/favicon-32x32.png"
     },
     "web_accessible_resources": [
-      {
-        "resources": ["images/*", "settings.js"],
-        "matches": ["<all_urls>"]
-      }
+        {
+            "resources": ["images/*.webp", "images/*.png", "images/*.jpg"],
+            "matches": ["<all_urls>"]
+        }
     ]
 }

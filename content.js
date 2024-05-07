@@ -128,19 +128,27 @@ window.onload = function() {
 
 
     assistantContainer.appendChild(settingsButton);
-
-    // Image box
+    const robotImageURL = chrome.runtime.getURL('images/friendly_robot_head.webp');
     let imageBox = document.createElement('div');
+    imageBox.id = "aiImageBox"
     imageBox.style.cssText = `
         width: 100%;
         height: 120px;
-        background-color: #000000;
+        background-color: #000000; 
         margin-top: 25px;
         position: relative;
         margin-bottom: 10px;
+        background-size: contain; 
+        background-position: center;
+        background-repeat: no-repeat;
     `;
+    
+    // Append the imageBox to the assistantContainer
     assistantContainer.appendChild(imageBox);
 
+    const mutedImageURL = chrome.runtime.getURL('images/muteSpeaker.png');
+    const unmutedImageURL = chrome.runtime.getURL('images/speaker-filled-audio-tool.png');
+    
     let toggleAiMuteButton = document.createElement('button');
     toggleAiMuteButton.id = 'toggleAiMuteButton';
     toggleAiMuteButton.style.cssText = `
@@ -150,17 +158,43 @@ window.onload = function() {
         width: 30px;
         height: 30px;
         border-radius: 50%;
-        background-color: green;
         border: none;
         cursor: pointer;
+        background-size: 50%;
+        background-repeat: no-repeat;
+        background-position: center;
     `;
+    let currentUtterance = null; 
+    // Initialize the button with the appropriate image and background color
+    function updateMuteButton() {
+        if (aiMuted) {
+            toggleAiMuteButton.style.backgroundColor = 'red'; // Red indicates muted
+            toggleAiMuteButton.style.backgroundImage = `url('${mutedImageURL}')`;
+        } else {
+            toggleAiMuteButton.style.backgroundColor = 'green'; // Green indicates unmuted
+            toggleAiMuteButton.style.backgroundImage = `url('${unmutedImageURL}')`;
+        }
+    
+        // Adjust the volume of the current utterance if it's still speaking
+        if (currentUtterance && window.speechSynthesis.speaking) {
+            currentUtterance.volume = aiMuted ? 0 : 1;
+        }
+    }
+    
+    // Mute/unmute via the toggle button
+    toggleAiMuteButton.onclick = function () {
+        aiMuted = !aiMuted; // Toggle the mute state
+        updateMuteButton(); // Update the button and volume accordingly
+    };
+    
+    // Update the button initially
+    updateMuteButton();
+    
+    // Append the button to the imageBox
     imageBox.appendChild(toggleAiMuteButton);
 
-    toggleAiMuteButton.onclick = function() {
-        aiMuted = !aiMuted; // Toggle the mute state
-        toggleAiMuteButton.style.backgroundColor = aiMuted ? 'red' : 'green';
-    }
-
+    const webcamOnImageURL = chrome.runtime.getURL('images/webcam_on.png');
+    const webcamOffImageURL = chrome.runtime.getURL('images/no-webcam.png');
     // Webcam box and video element
     let webcamBox = document.createElement('div');
     webcamBox.id = 'webcam-box';
@@ -171,8 +205,8 @@ window.onload = function() {
         display: flex;
         justify-content: center;
         align-items: center;
-        background-image: url('images/no-webcam.png');
-        background-size: cover;
+        background-image: url('${webcamOffImageURL}');
+        background-size: 50%;
         background-position: center;
         background-repeat: no-repeat;
         position: relative;
@@ -199,6 +233,10 @@ window.onload = function() {
         width: 30px;
         height: 30px;
         border-radius: 50%;
+        background-image: url('${webcamOnImageURL}');
+        background-size: 50%;
+        background-position: center;
+        background-repeat: no-repeat;
         background-color: green;
         border: none;
         cursor: pointer;
@@ -211,10 +249,11 @@ window.onload = function() {
             webcamVideo.srcObject = null;
             webcamVideo.style.display = 'none';
             this.style.backgroundColor = 'green';
-            webcamBox.style.backgroundImage = "url('no-webcam.png')";
+            webcamBox.style.backgroundImage = `url('${webcamOffImageURL}')`;
             webcamBox.style.backgroundRepeat = 'no-repeat';
             webcamBox.style.backgroundPosition = 'center';
             webcamBox.style.backgroundSize = 'cover';
+            this.style.backgroundImage = `url('${webcamOffImageURL}')`;
         } else {
             // Turn on the webcam
             navigator.mediaDevices.getUserMedia({ video: true })
@@ -225,6 +264,7 @@ window.onload = function() {
                     webcamVideo.style.display = 'block';
                     webcamBox.style.backgroundImage = 'none';
                     toggleWebcamButton.style.backgroundColor = 'red';
+                    toggleWebcamButton.style.backgroundImage = `url('${webcamOnImageURL}')`;
                 })
                 .catch(function(error) {
                     console.error("Error accessing the webcam: ", error);
@@ -277,6 +317,7 @@ startInterview.onclick = function() {
                         endInterview();
                     }
                 }, 1000);
+                imageBox.style.backgroundImage = `url('${robotImageURL}')`;
             })
             .catch(function(error) {
                 console.error("Error accessing the microphone: ", error);
@@ -309,6 +350,8 @@ function endInterview() {
     micControl.textContent = 'Open Mic';
     clearInterval(interviewTimer);
     remainingTime = 3600; // reset timer
+    imageBox.style.backgroundImage = 'none';
+    imageBox.style.backgroundColor = '#000000';
 }
     assistantContainer.appendChild(startInterview); // Append it somewhere in the sidebar
 
@@ -605,23 +648,38 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     }
 
     function speakText(text) {
-        if ('speechSynthesis' in window && !aiMuted) {
-            // Check if speaking is currently being processed and cancel it to start fresh
+        const imageBox = document.getElementById('aiImageBox');
+    
+        if ('speechSynthesis' in window) {
+            // Cancel any ongoing speech to start fresh
             if (window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
             }
-        
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.voice = speechSynthesis.getVoices().find(voice => voice.lang === "en-US"); // Optional: Set the voice to a specific one
-            utterance.pitch = 1; // Optional: Set pitch, can be between 0 (lowest) and 2 (highest), 1 is default
-            utterance.rate = 1; // Optional: Set rate, can be between 0.1 (slowest) and 10 (fastest), 1 is default
-            utterance.volume = 1; // Optional: Set volume, can be between 0 (muted) and 1 (loudest), 1 is default
-        
-            window.speechSynthesis.speak(utterance);
+    
+            // Create a new utterance object
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            currentUtterance.voice = speechSynthesis.getVoices().find(voice => voice.lang === "en-US"); // Set the voice to a specific one if available
+            currentUtterance.pitch = 1; // Adjust as needed
+            currentUtterance.rate = 1; // Adjust as needed
+            currentUtterance.volume = aiMuted ? 0 : 1; // Set volume to 0 if muted, or 1 if unmuted
+    
+            // Add a green border when the speech starts
+            currentUtterance.onstart = function () {
+                imageBox.style.border = "3px solid green";
+            };
+    
+            // Remove the border when speech ends
+            currentUtterance.onend = function () {
+                imageBox.style.border = "none";
+            };
+    
+            // Speak the current utterance
+            window.speechSynthesis.speak(currentUtterance);
         } else {
-            console.log("Sorry, your browser does not support text to speech!");
+            console.log("Sorry, your browser does not support text-to-speech!");
         }
     }
+    
     
 
     function toggleAssistantContainer() {
