@@ -175,16 +175,18 @@ window.onload = function() {
             toggleAiMuteButton.style.backgroundImage = `url('${unmutedImageURL}')`;
         }
     
-        // Adjust the volume of the current utterance if it's still speaking
-        if (currentUtterance && window.speechSynthesis.speaking) {
-            currentUtterance.volume = aiMuted ? 0 : 1;
+        // If already speaking, restart with a portion of text to simulate resuming
+        if (window.speechSynthesis.speaking) {
+            utteranceText = getResumeText(); // Get the approximate resume text
+            speakText(utteranceText);
         }
     }
     
     // Mute/unmute via the toggle button
     toggleAiMuteButton.onclick = function () {
-        aiMuted = !aiMuted; // Toggle the mute state
-        updateMuteButton(); // Update the button and volume accordingly
+        aiMuted = !aiMuted;
+        pausedDuration = Date.now() - startTime; // Record the elapsed time up to this point
+        updateMuteButton();
     };
     
     // Update the button initially
@@ -352,6 +354,9 @@ function endInterview() {
     remainingTime = 3600; // reset timer
     imageBox.style.backgroundImage = 'none';
     imageBox.style.backgroundColor = '#000000';
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+    }
 }
     assistantContainer.appendChild(startInterview); // Append it somewhere in the sidebar
 
@@ -647,28 +652,40 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         }
     }
 
+    function getResumeText() {
+        const elapsedTime = Date.now() - startTime + pausedDuration; // Time passed since the utterance started
+        const wordsPerSecond = 2.5; // Approximate words per second, adjust this value for accuracy
+        const wordsElapsed = Math.floor(wordsPerSecond * (elapsedTime / 1000)); // Approximate words spoken so far
+    
+        // Split text by spaces to count the words
+        const words = utteranceText.split(' ');
+    
+        // Handle cases where it tries to resume beyond the available text
+        return words.slice(wordsElapsed).join(' ') || utteranceText;
+    }
     function speakText(text) {
         const imageBox = document.getElementById('aiImageBox');
+        utteranceText = text; // Store the text for possible restart
+        startTime = Date.now(); // Mark the starting time
     
         if ('speechSynthesis' in window) {
-            // Cancel any ongoing speech to start fresh
             if (window.speechSynthesis.speaking) {
-                window.speechSynthesis.cancel();
+                window.speechSynthesis.cancel(); // Stop ongoing speech
             }
     
             // Create a new utterance object
-            currentUtterance = new SpeechSynthesisUtterance(text);
-            currentUtterance.voice = speechSynthesis.getVoices().find(voice => voice.lang === "en-US"); // Set the voice to a specific one if available
-            currentUtterance.pitch = 1; // Adjust as needed
-            currentUtterance.rate = 1; // Adjust as needed
-            currentUtterance.volume = aiMuted ? 0 : 1; // Set volume to 0 if muted, or 1 if unmuted
+            currentUtterance = new SpeechSynthesisUtterance(utteranceText);
+            currentUtterance.voice = speechSynthesis.getVoices().find(voice => voice.lang === "en-US");
+            currentUtterance.pitch = 1;
+            currentUtterance.rate = 1;
+            currentUtterance.volume = aiMuted ? 0 : 1;
     
-            // Add a green border when the speech starts
+            // Add a green border when speech starts
             currentUtterance.onstart = function () {
                 imageBox.style.border = "3px solid green";
             };
     
-            // Remove the border when speech ends
+            // Remove the border after speech ends
             currentUtterance.onend = function () {
                 imageBox.style.border = "none";
             };
