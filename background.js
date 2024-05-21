@@ -5,6 +5,9 @@ chrome.runtime.onInstalled.addListener(() => {
         if (data.isEnabled === undefined) {
             // Set default state to enabled when first installed
             chrome.storage.local.set({isEnabled: true});
+            console.log("Extension installed, setting isEnabled to true");
+        } else {
+            console.log("Extension installed, current isEnabled state:", data.isEnabled);
         }
     });
 });
@@ -14,6 +17,7 @@ chrome.action.onClicked.addListener(function(tab) {
         // Toggle the enabled state
         var newState = !data.isEnabled;
         chrome.storage.local.set({isEnabled: newState}, function() {
+            console.log("Toggled isEnabled to", newState);
             // Send message to content script with the new state
             chrome.tabs.sendMessage(tab.id, {action: "toggleExtension", enabled: newState});
         });
@@ -42,7 +46,9 @@ chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
 const tabUpdateIntervals = {};
 
 function requestCurrentCode(tabId, selector) {
+    console.log('Requesting current code with selector:', selector);
     chrome.tabs.sendMessage(tabId, {action: "fetchCurrentCode", selector: selector}, response => {
+        console.log(response)
         if (response && response.text && response.language) {
             console.log('Received code:', response.text);
             chrome.storage.local.set({currentCode: response.text})
@@ -72,8 +78,8 @@ chrome.runtime.onMessage.addListener(function(request, sender) {
         if (!tabUpdateIntervals[tabId].fetchSession) {
             tabUpdateIntervals[tabId].fetchSession = setInterval(() => {
                 chrome.storage.local.get('isEnabled', function(data) {
-                    if (data.isEnabled) {
-                        const specificSelector = "#editor .view-lines.monaco-mouse-cursor-text"; // Update this selector as needed
+                    if (data.isEnabled) { 
+                        const specificSelector = ".view-lines.monaco-mouse-cursor-text"; // Update this selector as needed
                         requestCurrentCode(tabId, specificSelector);
                     }
                 });
@@ -89,7 +95,7 @@ chrome.runtime.onMessage.addListener(function(request, sender) {
                         chrome.tabs.sendMessage(tabId, {action: "displayTranscript", transcript: response});
                     }
                 });
-            }, 20000);  // Polling every 20 seconds
+            }, 200000);  // Polling every 20 seconds
         }
     } else if (request.action === "stopFetchingCode" && tabId) {
         // Clear specific intervals when requested to stop fetching

@@ -11,6 +11,7 @@ let interviewing = false;
 let micControl = null;
 let startInterview = null;
 let aiMuted = false;
+let recognition = null;
 
 
 window.onload = function() {
@@ -34,6 +35,7 @@ window.onload = function() {
     `;
     document.body.prepend(assistantContainer);
 
+    const logoImage = chrome.runtime.getURL('images/favicon-16x16.png');
     // Toggle handle
     toggleHandle = document.createElement('div');
     toggleHandle.id = 'ai-assistant-toggle-handle';
@@ -46,6 +48,9 @@ window.onload = function() {
         height: 30px;
         background-color: #ccc;
         border-radius: 15px 0 0 15px;
+        background-size: 70%;
+        background-position: center;
+        background-repeat: no-repeat;
         cursor: pointer;
         box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         transform: rotate(180deg);
@@ -75,9 +80,10 @@ window.onload = function() {
     };
     assistantContainer.appendChild(closeButton);
 
+    const settingImage = chrome.runtime.getURL('images/setting.png');
+
     // Settings button
     settingsButton = document.createElement('div');
-    settingsButton.innerHTML = '&#9881;'; // HTML entity for the cog symbol
     settingsButton.style.cssText = `
         position: absolute;
         top: 0px;
@@ -86,6 +92,12 @@ window.onload = function() {
         cursor: pointer;
         color: black;
         display: flex;
+        width: 30px;
+        height: 30px;
+        background-image: url('${settingImage}');
+        background-size: 70%;
+        background-position: center;
+        background-repeat: no-repeat;
         align-items: center;
         justify-content: center;
         transition: transform 0.3s ease; 
@@ -133,7 +145,7 @@ window.onload = function() {
     imageBox.id = "aiImageBox"
     imageBox.style.cssText = `
         width: 100%;
-        height: 120px;
+        height: 12vh;
         background-color: #000000; 
         margin-top: 25px;
         position: relative;
@@ -202,7 +214,7 @@ window.onload = function() {
     webcamBox.id = 'webcam-box';
     webcamBox.style.cssText = `
         width: 100%;
-        height: 120px;
+        height: 12vh;
         background-color: #ddd;
         display: flex;
         justify-content: center;
@@ -218,7 +230,7 @@ window.onload = function() {
     webcamVideo = document.createElement('video');
     webcamVideo.style.cssText = `
         width: 100%;
-        height: auto;
+        height: 100%;
         margin-top: 10px;
         margin-bottom: 10px;
     `;
@@ -304,26 +316,19 @@ startInterview.onclick = function() {
         chrome.runtime.sendMessage({action: "startFetchingCode"});
         interviewing = true;
         micControl.style.display = 'flex';
-        micControl.style.backgroundColor = 'red'; // Red when on
-        micControl.textContent = 'Mute Mic';
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(function(newStream) {
-                audioStream = newStream;
-                startInterview.style.backgroundColor = 'grey'; // Grey when on
-                startInterview.textContent = 'End Interview - Time: ' + formatTime(remainingTime);
-                interviewTimer = setInterval(function() {
-                    remainingTime--;
-                    startInterview.textContent = 'End Interview - Time: ' + formatTime(remainingTime);
-                    if (remainingTime <= 0) {
-                        clearInterval(interviewTimer);
-                        endInterview();
-                    }
-                }, 1000);
-                imageBox.style.backgroundImage = `url('${robotImageURL}')`;
-            })
-            .catch(function(error) {
-                console.error("Error accessing the microphone: ", error);
-            });
+        micControl.style.backgroundColor = '#6495ED'; // Red when on
+        micControl.textContent = 'Open Mic';
+        startInterview.style.backgroundColor = 'grey'; // Grey when on
+        startInterview.textContent = 'End Interview - Time: ' + formatTime(remainingTime);
+        interviewTimer = setInterval(function() {
+            remainingTime--;
+            startInterview.textContent = 'End Interview - Time: ' + formatTime(remainingTime);
+            if (remainingTime <= 0) {
+                clearInterval(interviewTimer);
+                endInterview();
+            }
+        }, 1000);
+        imageBox.style.backgroundImage = `url('${robotImageURL}')`;
     } else {
         endInterview();
     }
@@ -354,6 +359,7 @@ function endInterview() {
     remainingTime = 3600; // reset timer
     imageBox.style.backgroundImage = 'none';
     imageBox.style.backgroundColor = '#000000';
+    imageBox.style.border = "none";
     if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
         window.speechSynthesis.cancel();
     }
@@ -378,26 +384,50 @@ function endInterview() {
         transition: background-color 0.3s;
     `;
     micControl.textContent = 'Open Mic'; // Initial text
-    micControl.onclick = function() {
+    let micTimer = null;
+    micControl.onclick = function () {
         if (audioStream) {
             // Turn off the microphone
             audioStream.getTracks().forEach(track => track.stop());
             audioStream = null;
             this.style.backgroundColor = '#6495ED'; // Grey when off
             this.textContent = 'Open Mic';
+            clearTimeout(micTimer); // Stop the timer if mic is manually turned off
+            if (recognition) recognition.stop(); // Stop recognition when mic is manually turned off
         } else {
             // Turn on the microphone
             navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(function(newStream) {
+                .then(function (newStream) {
                     audioStream = newStream;
                     micControl.style.backgroundColor = 'red'; // Red when on
                     micControl.textContent = 'Mute Mic';
+    
+                    // Cancel speech synthesis if it's speaking
+                    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+                        window.speechSynthesis.cancel();
+                        imageBox.style.border = "none";
+                    }
+    
+                    // Start speech recognition
+                    if (recognition) recognition.start();
+    
+                    // Set a 10-second timer to automatically mute the mic
+                    micTimer = setTimeout(function () {
+                        if (audioStream) {
+                            audioStream.getTracks().forEach(track => track.stop());
+                            audioStream = null;
+                            micControl.style.backgroundColor = '#6495ED'; // Grey when off
+                            micControl.textContent = 'Open Mic';
+                        }
+                        if (recognition) recognition.stop(); // Stop recognition after the timer ends
+                    }, 10000); // 10,000 milliseconds = 10 seconds
                 })
-                .catch(function(error) {
+                .catch(function (error) {
                     console.error("Error accessing the microphone: ", error);
                 });
         }
     };
+    
     assistantContainer.appendChild(micControl); // Append it somewhere in the sidebar
 
     // Main container for the transcript box
@@ -495,19 +525,22 @@ function onMouseUp(e) {
 // Listening to messages and adding content to the scrollable container
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     if (message.action === "displayTranscript" && message.transcript) {
-        let transcriptContent = document.createElement('div');
-        transcriptContent.className = 'transcript-message';
-        transcriptContent.style.cssText = `
-            font-size: 10px; 
-            color: #000;
-            margin-bottom: 2px;
-        `;
-        transcriptContent.textContent = message.transcript;
-        scrollableContainer.appendChild(transcriptContent);  // Append messages to the scrollable container
-
+        addTranscriptMessage(message.transcript)
         speakText(message.transcript);
     }
 });
+
+function addTranscriptMessage(text) {
+    const transcriptContent = document.createElement('div');
+    transcriptContent.className = 'transcript-message';
+    transcriptContent.style.cssText = `
+        font-size: 10px;
+        color: #000;
+        margin-bottom: 2px;
+    `;
+    transcriptContent.textContent = text;
+    scrollableContainer.appendChild(transcriptContent);
+}
 
     
     // Add the transcript box to the sidebar
@@ -559,6 +592,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     });
 
     function fetchCurrentCode(selector) {
+        console.log(selector)
         const elements = Array.from(document.querySelectorAll(selector + '> div'));
         if (elements.length === 0) {
             return 'Element not found or no content.';
@@ -697,7 +731,37 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         }
     }
     
+    function initializeSpeechRecognition() {
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = "en-US";
     
+            recognition.onresult = function (event) {
+                const transcriptText = event.results[0][0].transcript;
+                console.log("Recognized text:", transcriptText);
+                addTranscriptMessage(transcriptText);
+            };
+    
+            recognition.onerror = function (event) {
+                console.error("Speech recognition error:", event.error, event.message || '');
+            };
+    
+            recognition.onstart = function () {
+                console.log("Speech recognition started");
+            };
+    
+            recognition.onend = function () {
+                console.log("Speech recognition stopped");
+            };
+        } else {
+            console.log("Speech recognition not supported in this browser.");
+        }
+    }
+    
+    
+    initializeSpeechRecognition();
 
     function toggleAssistantContainer() {
         let currentWidth = assistantContainer.offsetWidth; // Get the current width of the sidebar
