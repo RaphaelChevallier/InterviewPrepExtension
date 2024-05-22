@@ -49,11 +49,18 @@ function requestCurrentCode(tabId, selector) {
     console.log('Requesting current code with selector:', selector);
     chrome.tabs.sendMessage(tabId, {action: "fetchCurrentCode", selector: selector}, response => {
         console.log(response)
-        if (response && response.text && response.language) {
-            console.log('Received code:', response.text);
-            chrome.storage.local.set({currentCode: response.text})
-            console.log('Received language: ', response.language );
-            chrome.storage.local.set({currentCodeLanguage: response.language})
+        if (response) {
+            if (response.text) {
+                console.log('Received code:', response.text);
+                chrome.storage.local.set({currentCode: response.text});
+            }
+            if (response.language) {
+                console.log('Received language:', response.language);
+                chrome.storage.local.set({currentCodeLanguage: response.language});
+            }
+            if (response.error) {
+                console.error('Error response:', response.error);
+            }
         } else {
             console.log('Failed to fetch code or coding language or no data returned.');
         }
@@ -79,7 +86,7 @@ chrome.runtime.onMessage.addListener(function(request, sender) {
             tabUpdateIntervals[tabId].fetchSession = setInterval(() => {
                 chrome.storage.local.get('isEnabled', function(data) {
                     if (data.isEnabled) { 
-                        const specificSelector = ".view-lines.monaco-mouse-cursor-text"; // Update this selector as needed
+                        const specificSelector = "div.view-line"; // Update this selector as needed
                         requestCurrentCode(tabId, specificSelector);
                     }
                 });

@@ -579,9 +579,13 @@ function addTranscriptMessage(text) {
         return header + "\n\nMain Problem Desicription:\n" + mainProblem + "\n\nPossible Topics Used to Solve:\n" + possibleUsefulDataStructuresAndAlgorithms + "\n\nSimilar Questions:\n" + similarQuestions;
     }
 
-    function readCodeLanguageForAssesment(){
-        const button = document.querySelector("#headlessui-popover-button-\\:r1d\\: > div > button");
-        return button.innerText;
+    async function readCodeLanguageForAssessment() {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const button = document.querySelector("#headlessui-popover-button-\\:r1d\\: > div > button");
+                resolve(button ? button.innerText : 'Unknown Language');
+            }, 500); // Simulate async operation
+        });
     }
 
     chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -591,31 +595,43 @@ function addTranscriptMessage(text) {
         }
     });
 
-    function fetchCurrentCode(selector) {
-        console.log(selector)
-        const elements = Array.from(document.querySelectorAll(selector + '> div'));
-        if (elements.length === 0) {
-            return 'Element not found or no content.';
-        }
-        
-        // Extracting the top value and sorting by it
-        const sortedElements = elements.map(element => {
-            const style = window.getComputedStyle(element);
-            const top = parseInt(style.top, 10);
-            return { element, top };
-        }).sort((a, b) => a.top - b.top);
+    async function fetchCurrentCode(selector) {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const elements = Array.from(document.querySelectorAll(selector));
+                if (elements.length === 0) {
+                    resolve('Element not found or no content.');
+                    return;
+                }
     
-        // Concatenating sorted text content
-        const text = sortedElements.map(item => item.element.innerText).join('\n');
-        return text;
+                // Extracting the top value and sorting by it
+                const sortedElements = elements.map(element => {
+                    const style = window.getComputedStyle(element);
+                    const top = parseInt(style.top, 10);
+                    return { element, top };
+                }).sort((a, b) => a.top - b.top);
+    
+                // Concatenating sorted text content
+                const text = sortedElements.map(item => item.element.innerText).join('\n');
+                console.log(text);
+                resolve(text);
+            }, 1000); // Simulate async operation
+        });
     }
     
     // Listen for messages from the background script
     chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         if (request.action === "fetchCurrentCode") {
-            const code = fetchCurrentCode(request.selector);
-            const codeLanguage = readCodeLanguageForAssesment();
-            sendResponse({text: code, language: codeLanguage});
+            (async () => {
+                try {
+                    const code = await fetchCurrentCode(request.selector);
+                    const codeLanguage = await readCodeLanguageForAssessment();
+                    sendResponse({ text: code, language: codeLanguage });
+                } catch (error) {
+                    console.error('Error fetching code or language:', error);
+                    sendResponse({ error: 'Failed to fetch code or language' });
+                }
+            })();
             return true;  // Indicates that you wish to send a response asynchronously
         }
     });
